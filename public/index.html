@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Gestione inventario magazzino multi-utente">
+  <meta name="theme-color" content="#2563eb">
+
+  <title>Inventario Magazzino</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%232563eb'/><text x='50' y='50' font-size='48' text-anchor='middle' dominant-baseline='central' fill='white' font-family='sans-serif' font-weight='bold'>IM</text></svg>">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <h1 class="header-title">📦 Inventario Magazzino</h1>
+      <div class="header-info">
+        <button id="copyUuidBtn" class="uuid-badge" title="Copia UUID" aria-label="Copia UUID negli appunti">
+          <span id="uuidDisplay">...</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+        <div class="badge" id="totalBadge">0 prodotti</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container main-content">
+    <!-- Add Product Form -->
+    <section class="card add-product-section">
+      <h2>Aggiungi Prodotto</h2>
+      <form id="addProductForm">
+        <div class="form-group">
+          <label for="productName">Nome Prodotto</label>
+          <input
+            type="text"
+            id="productName"
+            name="name"
+            placeholder="Es: Laptop Dell XPS 15"
+            required
+            autocomplete="off"
+          >
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="productQuantity">Quantità</label>
+            <input
+              type="number"
+              id="productQuantity"
+              name="quantity"
+              min="0"
+              value="1"
+              required
+            >
+          </div>
+          <button type="submit" class="btn btn-primary btn-add">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Aggiungi
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Products List -->
+    <section class="products-section">
+      <div class="section-header">
+        <h2>Prodotti</h2>
+        <button id="newInventoryBtn" class="btn btn-secondary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+          Nuovo Inventario
+        </button>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loadingState" class="loading-state">
+        <div class="spinner"></div>
+        <p>Caricamento...</p>
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="empty-state" style="display: none;">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M20 7h-9"></path>
+          <path d="M14 17H5"></path>
+          <circle cx="17" cy="17" r="3"></circle>
+          <circle cx="7" cy="7" r="3"></circle>
+        </svg>
+        <h3>Nessun prodotto</h3>
+        <p>Inizia aggiungendo il primo prodotto all'inventario!</p>
+      </div>
+
+      <!-- Products List -->
+      <div id="productsList" class="products-list"></div>
+
+      <!-- Offline Message -->
+      <div id="offlineMessage" class="offline-message" style="display: none;">
+        ⚠️ Offline - riconnetti per sincronizzare
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="/app.js"></script>
+</body>
+</html>
