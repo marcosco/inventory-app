@@ -293,13 +293,101 @@ input[type="number"] {
 /* Sort Control */
 .sort-control {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
+  flex-direction: column;
+  gap: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
   padding: var(--spacing-md);
   background-color: var(--bg-card);
   border-radius: var(--radius-lg);
   box-shadow: 0 1px 3px var(--shadow);
+}
+
+/* Search Wrapper */
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+}
+
+.search-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.search-label svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.search-input-container {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  flex: 1;
+  padding: var(--spacing-xs) var(--spacing-md);
+  padding-right: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  background-color: var(--bg-main);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-height: 40px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.search-input:hover {
+  border-color: var(--primary);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-search-btn:hover {
+  background-color: var(--bg-main);
+  color: var(--danger);
+}
+
+.clear-search-btn:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Sort Wrapper */
+.sort-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
 }
 
 .sort-label {
@@ -733,9 +821,25 @@ input[type="number"] {
   }
 
   .sort-control {
+    gap: var(--spacing-md);
+  }
+
+  .search-wrapper {
     flex-direction: column;
     align-items: stretch;
-    gap: var(--spacing-sm);
+  }
+
+  .search-label {
+    justify-content: center;
+  }
+
+  .search-input-container {
+    width: 100%;
+  }
+
+  .sort-wrapper {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .sort-label {

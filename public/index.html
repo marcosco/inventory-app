@@ -114,22 +114,51 @@
 
       <!-- Sort Control -->
       <div class="sort-control">
-        <label for="sortSelect" class="sort-label">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="4" y1="6" x2="20" y2="6"></line>
-            <line x1="8" y1="12" x2="20" y2="12"></line>
-            <line x1="12" y1="18" x2="20" y2="18"></line>
-          </svg>
-          Ordina per:
-        </label>
-        <select id="sortSelect" class="sort-select">
-          <option value="name-asc">Nome (A-Z)</option>
-          <option value="name-desc">Nome (Z-A)</option>
-          <option value="quantity-asc">Quantità (crescente)</option>
-          <option value="quantity-desc">Quantità (decrescente)</option>
-          <option value="date-desc">Più recenti</option>
-          <option value="date-asc">Più vecchi</option>
-        </select>
+        <!-- Search Input -->
+        <div class="search-wrapper">
+          <label for="searchInput" class="search-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            Cerca:
+          </label>
+          <div class="search-input-container">
+            <input
+              type="text"
+              id="searchInput"
+              class="search-input"
+              placeholder="Filtra per nome..."
+              autocomplete="off"
+            >
+            <button id="clearSearchBtn" class="clear-search-btn" title="Pulisci ricerca" aria-label="Pulisci ricerca" style="display: none;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Sort Select -->
+        <div class="sort-wrapper">
+          <label for="sortSelect" class="sort-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <line x1="8" y1="12" x2="20" y2="12"></line>
+              <line x1="12" y1="18" x2="20" y2="18"></line>
+            </svg>
+            Ordina per:
+          </label>
+          <select id="sortSelect" class="sort-select">
+            <option value="name-asc">Nome (A-Z)</option>
+            <option value="name-desc">Nome (Z-A)</option>
+            <option value="quantity-asc">Quantità (crescente)</option>
+            <option value="quantity-desc">Quantità (decrescente)</option>
+            <option value="date-desc">Più recenti</option>
+            <option value="date-asc">Più vecchi</option>
+          </select>
+        </div>
       </div>
 
       <!-- Loading State -->
