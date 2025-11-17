@@ -112,6 +112,26 @@
         </button>
       </div>
 
+      <!-- Sort Control -->
+      <div class="sort-control">
+        <label for="sortSelect" class="sort-label">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="6" x2="20" y2="6"></line>
+            <line x1="8" y1="12" x2="20" y2="12"></line>
+            <line x1="12" y1="18" x2="20" y2="18"></line>
+          </svg>
+          Ordina per:
+        </label>
+        <select id="sortSelect" class="sort-select">
+          <option value="name-asc">Nome (A-Z)</option>
+          <option value="name-desc">Nome (Z-A)</option>
+          <option value="quantity-asc">Quantità (crescente)</option>
+          <option value="quantity-desc">Quantità (decrescente)</option>
+          <option value="date-desc">Più recenti</option>
+          <option value="date-asc">Più vecchi</option>
+        </select>
+      </div>
+
       <!-- Loading State -->
       <div id="loadingState" class="loading-state">
         <div class="spinner"></div>

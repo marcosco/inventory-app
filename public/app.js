@@ -1,6 +1,7 @@
 // State
 let currentUUID = null;
 let products = [];
+let currentSortCriteria = 'name-asc'; // Default sort
 let ws = null;
 let wsReconnectTimeout = null;
 let wsReconnectAttempts = 0;
@@ -27,7 +28,8 @@ const elements = {
   exportBtn: document.getElementById('exportBtn'),
   exportModal: document.getElementById('exportModal'),
   exportModalOverlay: document.getElementById('exportModalOverlay'),
-  closeExportModal: document.getElementById('closeExportModal')
+  closeExportModal: document.getElementById('closeExportModal'),
+  sortSelect: document.getElementById('sortSelect')
 };
 
 // Utility: Generate UUID v4
@@ -102,6 +104,78 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
+// Sort Functions
+function sortProducts(productsArray, criteria) {
+  const sorted = [...productsArray]; // Create a copy to avoid mutating original
+
+  switch (criteria) {
+    case 'name-asc':
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+
+    case 'name-desc':
+      sorted.sort((a, b) => b.name.localeCompare(a.name));
+      break;
+
+    case 'quantity-asc':
+      sorted.sort((a, b) => a.quantity - b.quantity);
+      break;
+
+    case 'quantity-desc':
+      sorted.sort((a, b) => b.quantity - a.quantity);
+      break;
+
+    case 'date-asc':
+      sorted.sort((a, b) => {
+        const dateA = new Date(a.created_at);
+        const dateB = new Date(b.created_at);
+        return dateA - dateB;
+      });
+      break;
+
+    case 'date-desc':
+      sorted.sort((a, b) => {
+        const dateA = new Date(a.created_at);
+        const dateB = new Date(b.created_at);
+        return dateB - dateA;
+      });
+      break;
+
+    default:
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return sorted;
+}
+
+function saveSortPreference(criteria) {
+  try {
+    localStorage.setItem('inventory-sort-preference', criteria);
+  } catch (error) {
+    console.error('Errore nel salvare la preferenza di ordinamento:', error);
+  }
+}
+
+function loadSortPreference() {
+  try {
+    const saved = localStorage.getItem('inventory-sort-preference');
+    if (saved) {
+      currentSortCriteria = saved;
+      if (elements.sortSelect) {
+        elements.sortSelect.value = saved;
+      }
+    }
+  } catch (error) {
+    console.error('Errore nel caricare la preferenza di ordinamento:', error);
+  }
+}
+
+function handleSortChange() {
+  currentSortCriteria = elements.sortSelect.value;
+  saveSortPreference(currentSortCriteria);
+  renderProducts();
+}
+
 // API Calls
 async function fetchProducts() {
   try {
@@ -138,7 +212,6 @@ async function addProduct(name, quantity) {
 
     const data = await response.json();
     products.push(data.product);
-    products.sort((a, b) => a.name.localeCompare(b.name));
     renderProducts();
     showToast('Prodotto aggiunto con successo!', 'success');
 
@@ -308,8 +381,11 @@ function renderProducts() {
 
   elements.emptyState.style.display = 'none';
 
+  // Sort products based on current criteria
+  const sortedProducts = sortProducts(products, currentSortCriteria);
+
   // Render products
-  elements.productsList.innerHTML = products.map(product => `
+  elements.productsList.innerHTML = sortedProducts.map(product => `
     <div class="product-card">
       <div class="product-info">
         <div class="product-name">${escapeHtml(product.name)}</div>
@@ -455,7 +531,6 @@ function handleProductAdded(product) {
   if (exists) return;
 
   products.push(product);
-  products.sort((a, b) => a.name.localeCompare(b.name));
   renderProducts();
   showToast(`Nuovo prodotto aggiunto: ${product.name}`, 'info');
 }
@@ -465,7 +540,6 @@ function handleProductUpdated(product) {
   if (index === -1) {
     // Product doesn't exist locally, add it
     products.push(product);
-    products.sort((a, b) => a.name.localeCompare(b.name));
   } else {
     // Update existing product
     products[index] = product;
@@ -551,6 +625,9 @@ function initApp() {
 
   // Display UUID
   elements.uuidDisplay.textContent = truncateUUID(currentUUID);
+
+  // Load sort preference from localStorage
+  loadSortPreference();
 
   // Load inventory info and products
   fetchInventoryInfo();
@@ -661,6 +738,9 @@ document.querySelectorAll('.export-option-btn').forEach(btn => {
     exportInventory(format);
   });
 });
+
+// Sort selection listener
+elements.sortSelect.addEventListener('change', handleSortChange);
 
 // Close modal on Escape key
 document.addEventListener('keydown', (e) => {
