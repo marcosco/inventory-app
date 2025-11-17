@@ -5,9 +5,16 @@ const { v4: uuidv4, validate: isValidUUID } = require('uuid');
 const PDFDocument = require('pdfkit');
 const WebSocket = require('ws');
 const http = require('http');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+// Admin session tokens (in-memory storage)
+// Structure: { token: { createdAt: timestamp } }
+const adminTokens = new Map();
+const ADMIN_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -58,6 +65,25 @@ try {
   if (!hasNameColumn) {
     console.log('🔄 Migrazione: aggiunta colonna name alla tabella inventories');
     db.exec(`ALTER TABLE inventories ADD COLUMN name TEXT NOT NULL DEFAULT 'Inventario Magazzino'`);
+    console.log('✅ Migrazione completata');
+  }
+} catch (error) {
+  console.error('❌ Errore durante la migrazione:', error);
+  // Se la colonna esiste già, ignora l'errore
+}
+
+// Migrazione: aggiungi colonna 'updated_at' se non esiste
+try {
+  const tableInfo = db.prepare("PRAGMA table_info(inventories)").all();
+  const hasUpdatedAtColumn = tableInfo.some(col => col.name === 'updated_at');
+
+  if (!hasUpdatedAtColumn) {
+    console.log('🔄 Migrazione: aggiunta colonna updated_at alla tabella inventories');
+    // SQLite non permette DEFAULT CURRENT_TIMESTAMP in ALTER TABLE
+    // Usiamo NULL come default e poi aggiorniamo i record
+    db.exec(`ALTER TABLE inventories ADD COLUMN updated_at DATETIME`);
+    // Inizializza updated_at con created_at per record esistenti
+    db.exec(`UPDATE inventories SET updated_at = created_at WHERE updated_at IS NULL`);
     console.log('✅ Migrazione completata');
   }
 } catch (error) {
@@ -157,12 +183,23 @@ function getOrCreateInventory(uuid) {
   let inventory = db.prepare('SELECT * FROM inventories WHERE uuid = ?').get(uuid);
 
   if (!inventory) {
-    const insert = db.prepare('INSERT INTO inventories (uuid) VALUES (?)');
-    const result = insert.run(uuid);
-    inventory = { id: result.lastInsertRowid, uuid, created_at: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const insert = db.prepare('INSERT INTO inventories (uuid, updated_at) VALUES (?, ?)');
+    const result = insert.run(uuid, now);
+    inventory = { id: result.lastInsertRowid, uuid, created_at: now, updated_at: now };
   }
 
   return inventory;
+}
+
+// Helper: Update inventory updated_at timestamp
+function updateInventoryTimestamp(inventoryId) {
+  try {
+    const update = db.prepare('UPDATE inventories SET updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    update.run(inventoryId);
+  } catch (error) {
+    console.error('Errore aggiornamento timestamp inventario:', error);
+  }
 }
 
 // Health check endpoint
@@ -212,7 +249,7 @@ app.put('/api/:uuid/name', (req, res) => {
     }
 
     const inventory = getOrCreateInventory(uuid);
-    const update = db.prepare('UPDATE inventories SET name = ? WHERE id = ?');
+    const update = db.prepare('UPDATE inventories SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
     update.run(name.trim(), inventory.id);
 
     const updated = db.prepare('SELECT * FROM inventories WHERE id = ?').get(inventory.id);
@@ -313,6 +350,9 @@ app.post('/api/:uuid/products', (req, res) => {
 
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(result.lastInsertRowid);
 
+    // Update inventory timestamp
+    updateInventoryTimestamp(inventory.id);
+
     // Notify all connected clients
     notifyInventoryClients(uuid, {
       type: 'product:added',
@@ -357,6 +397,9 @@ app.put('/api/:uuid/products/:productId', (req, res) => {
 
     const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
 
+    // Update inventory timestamp
+    updateInventoryTimestamp(inventory.id);
+
     // Notify all connected clients
     notifyInventoryClients(uuid, {
       type: 'product:updated',
@@ -392,6 +435,9 @@ app.delete('/api/:uuid/products/:productId', (req, res) => {
 
     const del = db.prepare('DELETE FROM products WHERE id = ?');
     del.run(productId);
+
+    // Update inventory timestamp
+    updateInventoryTimestamp(inventory.id);
 
     // Notify all connected clients
     notifyInventoryClients(uuid, {
@@ -575,6 +621,195 @@ app.get('/api/:uuid/export/text', (req, res) => {
 function padRight(str, length) {
   return str + ' '.repeat(Math.max(0, length - str.length));
 }
+
+// ============================================
+// ADMIN ROUTES
+// ============================================
+
+// Helper: Generate random token
+function generateAdminToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// Helper: Verify admin token
+function verifyAdminToken(token) {
+  if (!token) return false;
+
+  const session = adminTokens.get(token);
+  if (!session) return false;
+
+  // Check if token is expired
+  const now = Date.now();
+  if (now - session.createdAt > ADMIN_TOKEN_EXPIRY) {
+    adminTokens.delete(token);
+    return false;
+  }
+
+  return true;
+}
+
+// Middleware: Require admin authentication
+function requireAdmin(req, res, next) {
+  const token = req.headers['x-admin-token'];
+
+  if (!verifyAdminToken(token)) {
+    return res.status(401).json({ error: 'Non autorizzato' });
+  }
+
+  next();
+}
+
+// POST /api/admin/login - Admin login
+app.post('/api/admin/login', (req, res) => {
+  try {
+    const { password } = req.body;
+
+    if (!password || password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Password non valida' });
+    }
+
+    // Generate token
+    const token = generateAdminToken();
+    adminTokens.set(token, { createdAt: Date.now() });
+
+    console.log('🔐 Admin login effettuato');
+
+    res.json({
+      success: true,
+      token,
+      expiresIn: ADMIN_TOKEN_EXPIRY
+    });
+  } catch (error) {
+    console.error('Errore admin login:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// POST /api/admin/logout - Admin logout
+app.post('/api/admin/logout', requireAdmin, (req, res) => {
+  try {
+    const token = req.headers['x-admin-token'];
+    adminTokens.delete(token);
+
+    console.log('🔐 Admin logout effettuato');
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Errore admin logout:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// GET /api/admin/inventories - Lista tutti gli inventari
+app.get('/api/admin/inventories', requireAdmin, (req, res) => {
+  try {
+    const inventories = db.prepare('SELECT * FROM inventories ORDER BY created_at DESC').all();
+
+    // Per ogni inventario, ottieni il conteggio prodotti e client connessi
+    const inventoriesWithDetails = inventories.map(inventory => {
+      // Conteggio prodotti
+      const productCount = db.prepare(
+        'SELECT COUNT(*) as count FROM products WHERE inventory_id = ?'
+      ).get(inventory.id).count;
+
+      // Client connessi
+      const connections = inventoryConnections.get(inventory.uuid);
+      const clientCount = connections ? connections.size : 0;
+
+      // Totale quantità articoli
+      const totalQuantity = db.prepare(
+        'SELECT SUM(quantity) as total FROM products WHERE inventory_id = ?'
+      ).get(inventory.id).total || 0;
+
+      return {
+        uuid: inventory.uuid,
+        name: inventory.name || 'Inventario Magazzino',
+        created_at: inventory.created_at,
+        updated_at: inventory.updated_at,
+        product_count: productCount,
+        total_quantity: totalQuantity,
+        connected_clients: clientCount
+      };
+    });
+
+    res.json({
+      inventories: inventoriesWithDetails,
+      total: inventoriesWithDetails.length
+    });
+  } catch (error) {
+    console.error('Errore GET admin inventories:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// DELETE /api/admin/inventories/:uuid - Elimina inventario
+app.delete('/api/admin/inventories/:uuid', requireAdmin, (req, res) => {
+  try {
+    const { uuid } = req.params;
+
+    if (!isValidUUID(uuid)) {
+      return res.status(400).json({ error: 'UUID non valido' });
+    }
+
+    const inventory = db.prepare('SELECT * FROM inventories WHERE uuid = ?').get(uuid);
+
+    if (!inventory) {
+      return res.status(404).json({ error: 'Inventario non trovato' });
+    }
+
+    // Elimina tutti i prodotti (CASCADE dovrebbe gestirlo, ma facciamolo esplicitamente)
+    db.prepare('DELETE FROM products WHERE inventory_id = ?').run(inventory.id);
+
+    // Elimina l'inventario
+    db.prepare('DELETE FROM inventories WHERE id = ?').run(inventory.id);
+
+    // Chiudi connessioni WebSocket per questo inventario
+    const connections = inventoryConnections.get(uuid);
+    if (connections) {
+      connections.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'inventory:deleted',
+            message: 'Questo inventario è stato eliminato dall\'amministratore'
+          }));
+          client.close();
+        }
+      });
+      inventoryConnections.delete(uuid);
+    }
+
+    console.log(`🗑️  Inventario eliminato: ${uuid} (${inventory.name})`);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Errore DELETE admin inventory:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// GET /api/admin/stats - Statistiche generali
+app.get('/api/admin/stats', requireAdmin, (req, res) => {
+  try {
+    const totalInventories = db.prepare('SELECT COUNT(*) as count FROM inventories').get().count;
+    const totalProducts = db.prepare('SELECT COUNT(*) as count FROM products').get().count;
+    const totalConnections = Array.from(inventoryConnections.values())
+      .reduce((sum, connections) => sum + connections.size, 0);
+
+    res.json({
+      total_inventories: totalInventories,
+      total_products: totalProducts,
+      total_connected_clients: totalConnections
+    });
+  } catch (error) {
+    console.error('Errore GET admin stats:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// Admin page route
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 // Catch-all route per servire index.html
 app.get('*', (req, res) => {
