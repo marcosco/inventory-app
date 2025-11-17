@@ -2,6 +2,7 @@
 let currentUUID = null;
 let products = [];
 let currentSortCriteria = 'name-asc'; // Default sort
+let currentSearchQuery = ''; // Search filter
 let ws = null;
 let wsReconnectTimeout = null;
 let wsReconnectAttempts = 0;
@@ -29,7 +30,9 @@ const elements = {
   exportModal: document.getElementById('exportModal'),
   exportModalOverlay: document.getElementById('exportModalOverlay'),
   closeExportModal: document.getElementById('closeExportModal'),
-  sortSelect: document.getElementById('sortSelect')
+  sortSelect: document.getElementById('sortSelect'),
+  searchInput: document.getElementById('searchInput'),
+  clearSearchBtn: document.getElementById('clearSearchBtn')
 };
 
 // Utility: Generate UUID v4
@@ -173,6 +176,39 @@ function loadSortPreference() {
 function handleSortChange() {
   currentSortCriteria = elements.sortSelect.value;
   saveSortPreference(currentSortCriteria);
+  renderProducts();
+}
+
+// Search Functions
+function filterProductsBySearch(productsArray, searchQuery) {
+  if (!searchQuery || searchQuery.trim() === '') {
+    return productsArray;
+  }
+
+  const query = searchQuery.toLowerCase().trim();
+  return productsArray.filter(product =>
+    product.name.toLowerCase().includes(query)
+  );
+}
+
+function handleSearchInput() {
+  currentSearchQuery = elements.searchInput.value;
+
+  // Show/hide clear button
+  if (currentSearchQuery && currentSearchQuery.trim() !== '') {
+    elements.clearSearchBtn.style.display = 'flex';
+  } else {
+    elements.clearSearchBtn.style.display = 'none';
+  }
+
+  renderProducts();
+}
+
+function handleClearSearch() {
+  currentSearchQuery = '';
+  elements.searchInput.value = '';
+  elements.clearSearchBtn.style.display = 'none';
+  elements.searchInput.focus();
   renderProducts();
 }
 
@@ -368,21 +404,37 @@ function renderProducts() {
   // Hide loading
   elements.loadingState.style.display = 'none';
 
-  // Update total badge
+  // Update total badge (always show total products count)
   const total = products.length;
   elements.totalBadge.textContent = `${total} prodott${total === 1 ? 'o' : 'i'}`;
 
-  // Show empty state if no products
-  if (products.length === 0) {
+  // Apply search filter first
+  const filteredProducts = filterProductsBySearch(products, currentSearchQuery);
+
+  // Show empty state if no products after filtering
+  if (filteredProducts.length === 0) {
     elements.emptyState.style.display = 'block';
     elements.productsList.innerHTML = '';
+
+    // Update empty state message based on whether we're searching
+    if (currentSearchQuery && currentSearchQuery.trim() !== '') {
+      const emptyStateTitle = elements.emptyState.querySelector('h3');
+      const emptyStateText = elements.emptyState.querySelector('p');
+      if (emptyStateTitle) emptyStateTitle.textContent = 'Nessun prodotto trovato';
+      if (emptyStateText) emptyStateText.textContent = 'Prova a modificare il termine di ricerca.';
+    } else {
+      const emptyStateTitle = elements.emptyState.querySelector('h3');
+      const emptyStateText = elements.emptyState.querySelector('p');
+      if (emptyStateTitle) emptyStateTitle.textContent = 'Nessun prodotto';
+      if (emptyStateText) emptyStateText.textContent = 'Inizia aggiungendo il primo prodotto all\'inventario!';
+    }
     return;
   }
 
   elements.emptyState.style.display = 'none';
 
-  // Sort products based on current criteria
-  const sortedProducts = sortProducts(products, currentSortCriteria);
+  // Sort filtered products based on current criteria
+  const sortedProducts = sortProducts(filteredProducts, currentSortCriteria);
 
   // Render products
   elements.productsList.innerHTML = sortedProducts.map(product => `
@@ -741,6 +793,15 @@ document.querySelectorAll('.export-option-btn').forEach(btn => {
 
 // Sort selection listener
 elements.sortSelect.addEventListener('change', handleSortChange);
+
+// Search input listeners
+elements.searchInput.addEventListener('input', handleSearchInput);
+elements.searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    handleClearSearch();
+  }
+});
+elements.clearSearchBtn.addEventListener('click', handleClearSearch);
 
 // Close modal on Escape key
 document.addEventListener('keydown', (e) => {
