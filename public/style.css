@@ -232,6 +232,59 @@ input[type="number"] {
   max-width: 100px;
 }
 
+/* Autocomplete */
+.autocomplete-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  box-shadow: 0 4px 6px var(--shadow);
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: none;
+}
+
+.autocomplete-list.show {
+  display: block;
+}
+
+.autocomplete-item {
+  padding: var(--spacing-md);
+  cursor: pointer;
+  transition: background-color 0.15s;
+  border-bottom: 1px solid var(--border);
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background-color: #f3f4f6;
+}
+
+.autocomplete-item-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.autocomplete-item-qty {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;

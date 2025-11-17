@@ -9,6 +9,12 @@ let wsReconnectAttempts = 0;
 const WS_MAX_RECONNECT_ATTEMPTS = 10;
 const WS_RECONNECT_DELAY = 2000;
 
+// Product lookup state
+let editMode = false;
+let editingProductId = null;
+let autocompleteTimeout = null;
+const AUTOCOMPLETE_DEBOUNCE = 300;
+
 // DOM Elements
 const elements = {
   inventoryTitle: document.getElementById('inventoryTitle'),
@@ -32,7 +38,8 @@ const elements = {
   closeExportModal: document.getElementById('closeExportModal'),
   sortSelect: document.getElementById('sortSelect'),
   searchInput: document.getElementById('searchInput'),
-  clearSearchBtn: document.getElementById('clearSearchBtn')
+  clearSearchBtn: document.getElementById('clearSearchBtn'),
+  autocompleteList: document.getElementById('autocompleteList')
 };
 
 // Utility: Generate UUID v4
@@ -212,6 +219,120 @@ function handleClearSearch() {
   renderProducts();
 }
 
+// Product Lookup Functions
+async function searchProducts(query) {
+  if (!query || query.trim().length === 0) {
+    hideAutocomplete();
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/${currentUUID}/products/search?q=${encodeURIComponent(query)}`);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    showAutocomplete(data.products || []);
+  } catch (error) {
+    console.error('Errore nella ricerca dei prodotti:', error);
+    hideAutocomplete();
+  }
+}
+
+function showAutocomplete(products) {
+  if (products.length === 0) {
+    hideAutocomplete();
+    return;
+  }
+
+  elements.autocompleteList.innerHTML = products.map(product => `
+    <div class="autocomplete-item" data-id="${product.id}" data-name="${escapeHtml(product.name)}" data-quantity="${product.quantity}">
+      <div class="autocomplete-item-name">${escapeHtml(product.name)}</div>
+      <div class="autocomplete-item-qty">Quantità: ${product.quantity}</div>
+    </div>
+  `).join('');
+
+  elements.autocompleteList.classList.add('show');
+
+  // Add click listeners to autocomplete items
+  document.querySelectorAll('.autocomplete-item').forEach(item => {
+    item.addEventListener('click', () => {
+      selectProduct(
+        parseInt(item.dataset.id),
+        item.dataset.name,
+        parseInt(item.dataset.quantity)
+      );
+    });
+  });
+}
+
+function hideAutocomplete() {
+  elements.autocompleteList.classList.remove('show');
+  elements.autocompleteList.innerHTML = '';
+}
+
+function selectProduct(productId, productName, productQuantity) {
+  editMode = true;
+  editingProductId = productId;
+
+  // Update form
+  elements.productName.value = productName;
+  elements.productQuantity.value = productQuantity;
+
+  // Update button
+  const submitBtn = elements.addProductForm.querySelector('button[type="submit"]');
+  const btnText = submitBtn.querySelector('svg').nextSibling;
+  if (btnText) {
+    btnText.textContent = 'Modifica';
+  }
+
+  // Hide autocomplete
+  hideAutocomplete();
+
+  // Focus quantity field
+  elements.productQuantity.focus();
+  elements.productQuantity.select();
+}
+
+function resetFormToAddMode() {
+  editMode = false;
+  editingProductId = null;
+
+  // Update button
+  const submitBtn = elements.addProductForm.querySelector('button[type="submit"]');
+  const btnText = submitBtn.querySelector('svg').nextSibling;
+  if (btnText) {
+    btnText.textContent = 'Aggiungi';
+  }
+
+  // Reset form
+  elements.productName.value = '';
+  elements.productQuantity.value = '1';
+  elements.productName.focus();
+
+  // Hide autocomplete
+  hideAutocomplete();
+}
+
+function handleProductNameInput() {
+  const query = elements.productName.value.trim();
+
+  // Reset edit mode if user clears the field
+  if (!query) {
+    resetFormToAddMode();
+    hideAutocomplete();
+    return;
+  }
+
+  // Debounce search
+  clearTimeout(autocompleteTimeout);
+  autocompleteTimeout = setTimeout(() => {
+    searchProducts(query);
+  }, AUTOCOMPLETE_DEBOUNCE);
+}
+
 // API Calls
 async function fetchProducts() {
   try {
@@ -251,13 +372,37 @@ async function addProduct(name, quantity) {
     // per evitare duplicazioni quando il WS è più veloce della risposta HTTP
     showToast('Prodotto aggiunto con successo!', 'success');
 
-    // Reset form
-    elements.productName.value = '';
-    elements.productQuantity.value = '1';
-    elements.productName.focus();
+    // Reset form to add mode
+    resetFormToAddMode();
   } catch (error) {
     console.error('Errore nell\'aggiunta del prodotto:', error);
     showToast(error.message || 'Errore nell\'aggiunta del prodotto', 'error');
+  }
+}
+
+async function updateProduct(productId, quantity) {
+  try {
+    const response = await fetch(`/api/${currentUUID}/products/${productId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ quantity })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Errore durante la modifica');
+    }
+
+    const data = await response.json();
+    showToast('Prodotto modificato con successo!', 'success');
+
+    // Reset form to add mode
+    resetFormToAddMode();
+  } catch (error) {
+    console.error('Errore nella modifica del prodotto:', error);
+    showToast(error.message || 'Errore nella modifica del prodotto', 'error');
   }
 }
 
@@ -741,7 +886,12 @@ elements.addProductForm.addEventListener('submit', (e) => {
     return;
   }
 
-  addProduct(name, quantity);
+  // Check if we're in edit mode
+  if (editMode && editingProductId) {
+    updateProduct(editingProductId, quantity);
+  } else {
+    addProduct(name, quantity);
+  }
 });
 
 elements.newInventoryBtn.addEventListener('click', () => {
@@ -802,6 +952,21 @@ elements.searchInput.addEventListener('keydown', (e) => {
   }
 });
 elements.clearSearchBtn.addEventListener('click', handleClearSearch);
+
+// Product lookup listeners
+elements.productName.addEventListener('input', handleProductNameInput);
+elements.productName.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    hideAutocomplete();
+  }
+});
+
+// Click outside to close autocomplete
+document.addEventListener('click', (e) => {
+  if (!elements.productName.contains(e.target) && !elements.autocompleteList.contains(e.target)) {
+    hideAutocomplete();
+  }
+});
 
 // Close modal on Escape key
 document.addEventListener('keydown', (e) => {
