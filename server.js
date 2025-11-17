@@ -79,7 +79,9 @@ try {
 
   if (!hasUpdatedAtColumn) {
     console.log('🔄 Migrazione: aggiunta colonna updated_at alla tabella inventories');
-    db.exec(`ALTER TABLE inventories ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP`);
+    // SQLite non permette DEFAULT CURRENT_TIMESTAMP in ALTER TABLE
+    // Usiamo NULL come default e poi aggiorniamo i record
+    db.exec(`ALTER TABLE inventories ADD COLUMN updated_at DATETIME`);
     // Inizializza updated_at con created_at per record esistenti
     db.exec(`UPDATE inventories SET updated_at = created_at WHERE updated_at IS NULL`);
     console.log('✅ Migrazione completata');
@@ -181,9 +183,10 @@ function getOrCreateInventory(uuid) {
   let inventory = db.prepare('SELECT * FROM inventories WHERE uuid = ?').get(uuid);
 
   if (!inventory) {
-    const insert = db.prepare('INSERT INTO inventories (uuid) VALUES (?)');
-    const result = insert.run(uuid);
-    inventory = { id: result.lastInsertRowid, uuid, created_at: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const insert = db.prepare('INSERT INTO inventories (uuid, updated_at) VALUES (?, ?)');
+    const result = insert.run(uuid, now);
+    inventory = { id: result.lastInsertRowid, uuid, created_at: now, updated_at: now };
   }
 
   return inventory;
