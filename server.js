@@ -3,9 +3,14 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const { v4: uuidv4, validate: isValidUUID } = require('uuid');
 const PDFDocument = require('pdfkit');
+const WebSocket = require('ws');
+const http = require('http');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Create HTTP server
+const server = http.createServer(app);
 
 // Middleware
 app.use(express.json());
@@ -58,6 +63,93 @@ try {
 } catch (error) {
   console.error('❌ Errore durante la migrazione:', error);
   // Se la colonna esiste già, ignora l'errore
+}
+
+// WebSocket Server Setup
+const wss = new WebSocket.Server({ server });
+
+// Map to store WebSocket connections by inventory UUID
+// Structure: { uuid: Set<WebSocket> }
+const inventoryConnections = new Map();
+
+wss.on('connection', (ws, req) => {
+  let currentInventoryUUID = null;
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+
+      // Handle subscription to inventory
+      if (data.type === 'subscribe' && data.uuid) {
+        // Unsubscribe from previous inventory if any
+        if (currentInventoryUUID) {
+          const connections = inventoryConnections.get(currentInventoryUUID);
+          if (connections) {
+            connections.delete(ws);
+            if (connections.size === 0) {
+              inventoryConnections.delete(currentInventoryUUID);
+            }
+          }
+        }
+
+        // Subscribe to new inventory
+        currentInventoryUUID = data.uuid;
+        if (!inventoryConnections.has(currentInventoryUUID)) {
+          inventoryConnections.set(currentInventoryUUID, new Set());
+        }
+        inventoryConnections.get(currentInventoryUUID).add(ws);
+
+        // Send confirmation
+        ws.send(JSON.stringify({
+          type: 'subscribed',
+          uuid: currentInventoryUUID
+        }));
+
+        console.log(`📡 Client connesso all'inventario: ${currentInventoryUUID}`);
+      }
+    } catch (error) {
+      console.error('Errore nel parsing del messaggio WebSocket:', error);
+    }
+  });
+
+  ws.on('close', () => {
+    // Remove connection from inventory
+    if (currentInventoryUUID) {
+      const connections = inventoryConnections.get(currentInventoryUUID);
+      if (connections) {
+        connections.delete(ws);
+        if (connections.size === 0) {
+          inventoryConnections.delete(currentInventoryUUID);
+        }
+      }
+      console.log(`📡 Client disconnesso dall'inventario: ${currentInventoryUUID}`);
+    }
+  });
+
+  ws.on('error', (error) => {
+    console.error('Errore WebSocket:', error);
+  });
+
+  // Send initial connection message
+  ws.send(JSON.stringify({
+    type: 'connected',
+    message: 'WebSocket connesso'
+  }));
+});
+
+// Helper function to notify all clients connected to an inventory
+function notifyInventoryClients(uuid, event) {
+  const connections = inventoryConnections.get(uuid);
+  if (!connections) return;
+
+  const message = JSON.stringify(event);
+  connections.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+
+  console.log(`📡 Notifica inviata a ${connections.size} client dell'inventario ${uuid}:`, event.type);
 }
 
 // Helper functions
@@ -125,6 +217,15 @@ app.put('/api/:uuid/name', (req, res) => {
 
     const updated = db.prepare('SELECT * FROM inventories WHERE id = ?').get(inventory.id);
 
+    // Notify all connected clients
+    notifyInventoryClients(uuid, {
+      type: 'inventory:name-changed',
+      data: {
+        uuid: updated.uuid,
+        name: updated.name
+      }
+    });
+
     res.json({
       uuid: updated.uuid,
       name: updated.name,
@@ -184,6 +285,12 @@ app.post('/api/:uuid/products', (req, res) => {
 
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(result.lastInsertRowid);
 
+    // Notify all connected clients
+    notifyInventoryClients(uuid, {
+      type: 'product:added',
+      data: { product }
+    });
+
     res.status(201).json({ product });
   } catch (error) {
     console.error('Errore POST product:', error);
@@ -222,6 +329,12 @@ app.put('/api/:uuid/products/:productId', (req, res) => {
 
     const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
 
+    // Notify all connected clients
+    notifyInventoryClients(uuid, {
+      type: 'product:updated',
+      data: { product: updated }
+    });
+
     res.json({ product: updated });
   } catch (error) {
     console.error('Errore PUT product:', error);
@@ -251,6 +364,12 @@ app.delete('/api/:uuid/products/:productId', (req, res) => {
 
     const del = db.prepare('DELETE FROM products WHERE id = ?');
     del.run(productId);
+
+    // Notify all connected clients
+    notifyInventoryClients(uuid, {
+      type: 'product:deleted',
+      data: { productId: parseInt(productId) }
+    });
 
     res.json({ success: true });
   } catch (error) {
@@ -435,13 +554,20 @@ app.get('*', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📦 Database: ${dbPath}`);
+  console.log(`📡 WebSocket server ready for real-time sync`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
+  // Close all WebSocket connections
+  wss.clients.forEach(client => {
+    client.close();
+  });
+  wss.close();
+
   db.close();
   console.log('\n👋 Server chiuso');
   process.exit(0);
