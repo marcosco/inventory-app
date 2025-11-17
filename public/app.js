@@ -18,7 +18,11 @@ const elements = {
   emptyState: document.getElementById('emptyState'),
   newInventoryBtn: document.getElementById('newInventoryBtn'),
   offlineMessage: document.getElementById('offlineMessage'),
-  toastContainer: document.getElementById('toastContainer')
+  toastContainer: document.getElementById('toastContainer'),
+  exportBtn: document.getElementById('exportBtn'),
+  exportModal: document.getElementById('exportModal'),
+  exportModalOverlay: document.getElementById('exportModalOverlay'),
+  closeExportModal: document.getElementById('closeExportModal')
 };
 
 // Utility: Generate UUID v4
@@ -355,6 +359,41 @@ function handleDeleteProduct(productId, productName) {
   deleteProduct(productId, productName);
 }
 
+// Export Functions
+function showExportModal() {
+  elements.exportModal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function hideExportModal() {
+  elements.exportModal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function exportInventory(format) {
+  try {
+    hideExportModal();
+    showToast(`Generazione ${format.toUpperCase()} in corso...`, 'info');
+
+    const url = `/api/${currentUUID}/export/${format}`;
+
+    // Crea un link nascosto per scaricare il file
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = ''; // Il nome file viene dall'header Content-Disposition
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setTimeout(() => {
+      showToast(`File ${format.toUpperCase()} scaricato con successo!`, 'success');
+    }, 500);
+  } catch (error) {
+    console.error('Errore durante l\'esportazione:', error);
+    showToast('Errore durante l\'esportazione', 'error');
+  }
+}
+
 // Initialize App
 function initApp() {
   // Get or create UUID
@@ -437,6 +476,34 @@ elements.inventoryTitleInput.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     e.preventDefault();
     hideTitleEdit();
+  }
+});
+
+// Export modal listeners
+elements.exportBtn.addEventListener('click', () => {
+  showExportModal();
+});
+
+elements.closeExportModal.addEventListener('click', () => {
+  hideExportModal();
+});
+
+elements.exportModalOverlay.addEventListener('click', () => {
+  hideExportModal();
+});
+
+// Export format selection listeners
+document.querySelectorAll('.export-option-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const format = btn.getAttribute('data-format');
+    exportInventory(format);
+  });
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && elements.exportModal.style.display === 'flex') {
+    hideExportModal();
   }
 });
 
