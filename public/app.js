@@ -247,8 +247,8 @@ async function addProduct(name, quantity) {
     }
 
     const data = await response.json();
-    products.push(data.product);
-    renderProducts();
+    // Il prodotto verrà aggiunto alla UI tramite WebSocket
+    // per evitare duplicazioni quando il WS è più veloce della risposta HTTP
     showToast('Prodotto aggiunto con successo!', 'success');
 
     // Reset form
