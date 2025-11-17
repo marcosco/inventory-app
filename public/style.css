@@ -627,6 +627,108 @@ input[type="number"] {
   font-size: 1.125rem;
 }
 
+/* QR Code Section */
+.qr-code-section {
+  margin-top: var(--spacing-xl);
+}
+
+.qr-code-card {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  box-shadow: 0 1px 3px var(--shadow);
+  text-align: center;
+}
+
+.qr-code-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+  color: var(--text-primary);
+}
+
+.qr-code-description {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.qr-code-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  background-color: var(--bg-main);
+  border-radius: var(--radius-lg);
+  min-height: 200px;
+}
+
+.qr-code-container img {
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.qr-code-url {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.qr-code-url-input {
+  flex: 1;
+  min-width: 200px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-family: 'Courier New', monospace;
+  color: var(--text-secondary);
+  background-color: var(--bg-main);
+  text-align: center;
+}
+
+.qr-code-url-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.btn-copy-url {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: var(--min-touch);
+  white-space: nowrap;
+}
+
+.btn-copy-url:hover {
+  background-color: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px var(--shadow);
+}
+
+.btn-copy-url:active {
+  transform: translateY(0);
+}
+
+.btn-copy-url:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 /* Offline Message */
 .offline-message {
   background-color: #fef3c7;
@@ -910,6 +1012,19 @@ input[type="number"] {
   }
 
   .toast {
+    width: 100%;
+  }
+
+  .qr-code-url {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .qr-code-url-input {
+    width: 100%;
+  }
+
+  .btn-copy-url {
     width: 100%;
   }
 }
