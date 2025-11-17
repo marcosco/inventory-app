@@ -72,6 +72,23 @@ try {
   // Se la colonna esiste già, ignora l'errore
 }
 
+// Migrazione: aggiungi colonna 'updated_at' se non esiste
+try {
+  const tableInfo = db.prepare("PRAGMA table_info(inventories)").all();
+  const hasUpdatedAtColumn = tableInfo.some(col => col.name === 'updated_at');
+
+  if (!hasUpdatedAtColumn) {
+    console.log('🔄 Migrazione: aggiunta colonna updated_at alla tabella inventories');
+    db.exec(`ALTER TABLE inventories ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP`);
+    // Inizializza updated_at con created_at per record esistenti
+    db.exec(`UPDATE inventories SET updated_at = created_at WHERE updated_at IS NULL`);
+    console.log('✅ Migrazione completata');
+  }
+} catch (error) {
+  console.error('❌ Errore durante la migrazione:', error);
+  // Se la colonna esiste già, ignora l'errore
+}
+
 // WebSocket Server Setup
 const wss = new WebSocket.Server({ server });
 
@@ -172,6 +189,16 @@ function getOrCreateInventory(uuid) {
   return inventory;
 }
 
+// Helper: Update inventory updated_at timestamp
+function updateInventoryTimestamp(inventoryId) {
+  try {
+    const update = db.prepare('UPDATE inventories SET updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    update.run(inventoryId);
+  } catch (error) {
+    console.error('Errore aggiornamento timestamp inventario:', error);
+  }
+}
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -219,7 +246,7 @@ app.put('/api/:uuid/name', (req, res) => {
     }
 
     const inventory = getOrCreateInventory(uuid);
-    const update = db.prepare('UPDATE inventories SET name = ? WHERE id = ?');
+    const update = db.prepare('UPDATE inventories SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
     update.run(name.trim(), inventory.id);
 
     const updated = db.prepare('SELECT * FROM inventories WHERE id = ?').get(inventory.id);
@@ -320,6 +347,9 @@ app.post('/api/:uuid/products', (req, res) => {
 
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(result.lastInsertRowid);
 
+    // Update inventory timestamp
+    updateInventoryTimestamp(inventory.id);
+
     // Notify all connected clients
     notifyInventoryClients(uuid, {
       type: 'product:added',
@@ -364,6 +394,9 @@ app.put('/api/:uuid/products/:productId', (req, res) => {
 
     const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
 
+    // Update inventory timestamp
+    updateInventoryTimestamp(inventory.id);
+
     // Notify all connected clients
     notifyInventoryClients(uuid, {
       type: 'product:updated',
@@ -399,6 +432,9 @@ app.delete('/api/:uuid/products/:productId', (req, res) => {
 
     const del = db.prepare('DELETE FROM products WHERE id = ?');
     del.run(productId);
+
+    // Update inventory timestamp
+    updateInventoryTimestamp(inventory.id);
 
     // Notify all connected clients
     notifyInventoryClients(uuid, {
@@ -686,6 +722,7 @@ app.get('/api/admin/inventories', requireAdmin, (req, res) => {
         uuid: inventory.uuid,
         name: inventory.name || 'Inventario Magazzino',
         created_at: inventory.created_at,
+        updated_at: inventory.updated_at,
         product_count: productCount,
         total_quantity: totalQuantity,
         connected_clients: clientCount

@@ -277,6 +277,7 @@ function renderInventories() {
           <th>Prodotti</th>
           <th>Quantità Totale</th>
           <th>Client Connessi</th>
+          <th>Ultima Modifica</th>
           <th>Creato</th>
           <th>Azioni</th>
         </tr>
@@ -297,6 +298,7 @@ function renderInventories() {
                 ${inv.connected_clients === 0 ? '⚪' : '🟢'} ${inv.connected_clients}
               </span>
             </td>
+            <td>${formatDate(inv.updated_at)}</td>
             <td>${formatDate(inv.created_at)}</td>
             <td>
               <div class="actions-cell">
