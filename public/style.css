@@ -293,7 +293,7 @@ input[type="number"] {
 /* Sort Control */
 .sort-control {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
   padding: var(--spacing-md);
@@ -821,6 +821,7 @@ input[type="number"] {
   }
 
   .sort-control {
+    flex-direction: column;
     gap: var(--spacing-md);
   }
 
