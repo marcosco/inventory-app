@@ -4,6 +4,9 @@ let products = [];
 
 // DOM Elements
 const elements = {
+  inventoryTitle: document.getElementById('inventoryTitle'),
+  editTitleBtn: document.getElementById('editTitleBtn'),
+  inventoryTitleInput: document.getElementById('inventoryTitleInput'),
   uuidDisplay: document.getElementById('uuidDisplay'),
   copyUuidBtn: document.getElementById('copyUuidBtn'),
   totalBadge: document.getElementById('totalBadge'),
@@ -197,6 +200,87 @@ async function deleteProduct(productId, productName) {
   }
 }
 
+// Inventory Name Functions
+async function fetchInventoryInfo() {
+  try {
+    const response = await fetch(`/api/${currentUUID}/info`);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    updateInventoryTitle(data.name || 'Inventario Magazzino');
+  } catch (error) {
+    console.error('Errore nel caricamento delle info inventario:', error);
+    updateInventoryTitle('Inventario Magazzino');
+  }
+}
+
+async function updateInventoryName(newName) {
+  try {
+    const response = await fetch(`/api/${currentUUID}/name`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ name: newName })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Errore durante l\'aggiornamento');
+    }
+
+    const data = await response.json();
+    updateInventoryTitle(data.name);
+    showToast('Nome inventario aggiornato!', 'success');
+  } catch (error) {
+    console.error('Errore nell\'aggiornamento del nome:', error);
+    showToast(error.message || 'Errore nell\'aggiornamento del nome', 'error');
+    // Ricarica il nome originale
+    fetchInventoryInfo();
+  }
+}
+
+function updateInventoryTitle(name) {
+  elements.inventoryTitle.textContent = `📦 ${name}`;
+}
+
+function showTitleEdit() {
+  const currentName = elements.inventoryTitle.textContent.replace('📦 ', '').trim();
+  elements.inventoryTitleInput.value = currentName;
+  elements.inventoryTitle.style.display = 'none';
+  elements.editTitleBtn.style.display = 'none';
+  elements.inventoryTitleInput.style.display = 'block';
+  elements.inventoryTitleInput.focus();
+  elements.inventoryTitleInput.select();
+}
+
+function hideTitleEdit() {
+  elements.inventoryTitle.style.display = 'block';
+  elements.editTitleBtn.style.display = 'inline-flex';
+  elements.inventoryTitleInput.style.display = 'none';
+}
+
+function saveTitleEdit() {
+  const newName = elements.inventoryTitleInput.value.trim();
+
+  if (!newName) {
+    showToast('Il nome non può essere vuoto', 'error');
+    elements.inventoryTitleInput.value = elements.inventoryTitle.textContent.replace('📦 ', '').trim();
+    return;
+  }
+
+  if (newName.length > 100) {
+    showToast('Nome troppo lungo (max 100 caratteri)', 'error');
+    return;
+  }
+
+  hideTitleEdit();
+  updateInventoryName(newName);
+}
+
 // Render Functions
 function renderProducts() {
   // Hide loading
@@ -286,7 +370,8 @@ function initApp() {
   // Display UUID
   elements.uuidDisplay.textContent = truncateUUID(currentUUID);
 
-  // Load products
+  // Load inventory info and products
+  fetchInventoryInfo();
   fetchProducts();
 
   // Check online/offline status
@@ -333,6 +418,25 @@ elements.newInventoryBtn.addEventListener('click', () => {
   if (confirm('Creare un nuovo inventario? Verrai reindirizzato a un nuovo URL.')) {
     const newUUID = generateUUID();
     window.location.href = `/${newUUID}`;
+  }
+});
+
+// Inventory title edit listeners
+elements.editTitleBtn.addEventListener('click', () => {
+  showTitleEdit();
+});
+
+elements.inventoryTitleInput.addEventListener('blur', () => {
+  saveTitleEdit();
+});
+
+elements.inventoryTitleInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    saveTitleEdit();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    hideTitleEdit();
   }
 });
 

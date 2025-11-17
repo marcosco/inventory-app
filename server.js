@@ -43,6 +43,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_product_inventory ON products(inventory_id);
 `);
 
+// Migrazione: aggiungi colonna 'name' se non esiste
+try {
+  // Controlla se la colonna esiste
+  const tableInfo = db.prepare("PRAGMA table_info(inventories)").all();
+  const hasNameColumn = tableInfo.some(col => col.name === 'name');
+
+  if (!hasNameColumn) {
+    console.log('🔄 Migrazione: aggiunta colonna name alla tabella inventories');
+    db.exec(`ALTER TABLE inventories ADD COLUMN name TEXT NOT NULL DEFAULT 'Inventario Magazzino'`);
+    console.log('✅ Migrazione completata');
+  }
+} catch (error) {
+  console.error('❌ Errore durante la migrazione:', error);
+  // Se la colonna esiste già, ignora l'errore
+}
+
 // Helper functions
 function getOrCreateInventory(uuid) {
   let inventory = db.prepare('SELECT * FROM inventories WHERE uuid = ?').get(uuid);
@@ -62,6 +78,62 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
+
+// GET /api/:uuid/info - Ottieni informazioni inventario
+app.get('/api/:uuid/info', (req, res) => {
+  try {
+    const { uuid } = req.params;
+
+    if (!isValidUUID(uuid)) {
+      return res.status(400).json({ error: 'UUID non valido' });
+    }
+
+    const inventory = getOrCreateInventory(uuid);
+    res.json({
+      uuid: inventory.uuid,
+      name: inventory.name || 'Inventario Magazzino',
+      created_at: inventory.created_at
+    });
+  } catch (error) {
+    console.error('Errore GET inventory info:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// PUT /api/:uuid/name - Aggiorna nome inventario
+app.put('/api/:uuid/name', (req, res) => {
+  try {
+    const { uuid } = req.params;
+    const { name } = req.body;
+
+    if (!isValidUUID(uuid)) {
+      return res.status(400).json({ error: 'UUID non valido' });
+    }
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Nome inventario richiesto' });
+    }
+
+    if (name.trim().length > 100) {
+      return res.status(400).json({ error: 'Nome troppo lungo (max 100 caratteri)' });
+    }
+
+    const inventory = getOrCreateInventory(uuid);
+    const update = db.prepare('UPDATE inventories SET name = ? WHERE id = ?');
+    update.run(name.trim(), inventory.id);
+
+    const updated = db.prepare('SELECT * FROM inventories WHERE id = ?').get(inventory.id);
+
+    res.json({
+      uuid: updated.uuid,
+      name: updated.name,
+      created_at: updated.created_at
+    });
+  } catch (error) {
+    console.error('Errore PUT inventory name:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
 
 // GET /api/:uuid/products - Lista prodotti
 app.get('/api/:uuid/products', (req, res) => {
