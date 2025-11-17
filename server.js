@@ -258,6 +258,34 @@ app.get('/api/:uuid/products', (req, res) => {
   }
 });
 
+// GET /api/:uuid/products/search - Ricerca prodotti per nome
+app.get('/api/:uuid/products/search', (req, res) => {
+  try {
+    const { uuid } = req.params;
+    const { q } = req.query;
+
+    if (!isValidUUID(uuid)) {
+      return res.status(400).json({ error: 'UUID non valido' });
+    }
+
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
+      return res.json({ products: [] });
+    }
+
+    const inventory = getOrCreateInventory(uuid);
+    const searchTerm = `%${q.trim()}%`;
+
+    const products = db.prepare(
+      'SELECT * FROM products WHERE inventory_id = ? AND name LIKE ? COLLATE NOCASE ORDER BY name ASC LIMIT 5'
+    ).all(inventory.id, searchTerm);
+
+    res.json({ products });
+  } catch (error) {
+    console.error('Errore search products:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
 // POST /api/:uuid/products - Aggiungi prodotto
 app.post('/api/:uuid/products', (req, res) => {
   try {

@@ -65,14 +65,17 @@
       <form id="addProductForm">
         <div class="form-group">
           <label for="productName">Nome Prodotto</label>
-          <input
-            type="text"
-            id="productName"
-            name="name"
-            placeholder="Es: Laptop Dell XPS 15"
-            required
-            autocomplete="off"
-          >
+          <div class="autocomplete-wrapper">
+            <input
+              type="text"
+              id="productName"
+              name="name"
+              placeholder="Es: Laptop Dell XPS 15"
+              required
+              autocomplete="off"
+            >
+            <div id="autocompleteList" class="autocomplete-list"></div>
+          </div>
         </div>
         <div class="form-row">
           <div class="form-group">
