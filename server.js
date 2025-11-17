@@ -27,7 +27,6 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS inventories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL DEFAULT 'Inventario Magazzino',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -43,6 +42,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_inventory_uuid ON inventories(uuid);
   CREATE INDEX IF NOT EXISTS idx_product_inventory ON products(inventory_id);
 `);
+
+// Migrazione: aggiungi colonna 'name' se non esiste
+try {
+  // Controlla se la colonna esiste
+  const tableInfo = db.prepare("PRAGMA table_info(inventories)").all();
+  const hasNameColumn = tableInfo.some(col => col.name === 'name');
+
+  if (!hasNameColumn) {
+    console.log('🔄 Migrazione: aggiunta colonna name alla tabella inventories');
+    db.exec(`ALTER TABLE inventories ADD COLUMN name TEXT NOT NULL DEFAULT 'Inventario Magazzino'`);
+    console.log('✅ Migrazione completata');
+  }
+} catch (error) {
+  console.error('❌ Errore durante la migrazione:', error);
+  // Se la colonna esiste già, ignora l'errore
+}
 
 // Helper functions
 function getOrCreateInventory(uuid) {
