@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const Database = require('better-sqlite3');
 const { v4: uuidv4, validate: isValidUUID } = require('uuid');
+const PDFDocument = require('pdfkit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -257,6 +258,176 @@ app.delete('/api/:uuid/products/:productId', (req, res) => {
     res.status(500).json({ error: 'Errore interno del server' });
   }
 });
+
+// GET /api/:uuid/export/csv - Esporta inventario in CSV
+app.get('/api/:uuid/export/csv', (req, res) => {
+  try {
+    const { uuid } = req.params;
+
+    if (!isValidUUID(uuid)) {
+      return res.status(400).json({ error: 'UUID non valido' });
+    }
+
+    const inventory = getOrCreateInventory(uuid);
+    const products = db.prepare(
+      'SELECT * FROM products WHERE inventory_id = ? ORDER BY name ASC'
+    ).all(inventory.id);
+
+    // Genera CSV
+    let csv = 'Nome Prodotto,Quantità\n';
+    products.forEach(product => {
+      // Escape virgole e virgolette nel nome
+      const escapedName = product.name.replace(/"/g, '""');
+      csv += `"${escapedName}",${product.quantity}\n`;
+    });
+
+    const inventoryName = inventory.name || 'Inventario';
+    const filename = `${inventoryName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send('\uFEFF' + csv); // BOM per UTF-8
+  } catch (error) {
+    console.error('Errore export CSV:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// GET /api/:uuid/export/pdf - Esporta inventario in PDF
+app.get('/api/:uuid/export/pdf', (req, res) => {
+  try {
+    const { uuid } = req.params;
+
+    if (!isValidUUID(uuid)) {
+      return res.status(400).json({ error: 'UUID non valido' });
+    }
+
+    const inventory = getOrCreateInventory(uuid);
+    const products = db.prepare(
+      'SELECT * FROM products WHERE inventory_id = ? ORDER BY name ASC'
+    ).all(inventory.id);
+
+    const inventoryName = inventory.name || 'Inventario';
+    const filename = `${inventoryName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+    // Crea PDF
+    const doc = new PDFDocument({ margin: 50 });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    doc.pipe(res);
+
+    // Header
+    doc.fontSize(20).text(inventoryName, { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(10).text(`Data: ${new Date().toLocaleDateString('it-IT')}`, { align: 'center' });
+    doc.fontSize(10).text(`Totale prodotti: ${products.length}`, { align: 'center' });
+    doc.moveDown(2);
+
+    // Tabella
+    if (products.length === 0) {
+      doc.fontSize(12).text('Nessun prodotto nell\'inventario', { align: 'center' });
+    } else {
+      const tableTop = doc.y;
+      const itemCodeX = 50;
+      const itemNameX = 50;
+      const quantityX = 450;
+
+      // Header tabella
+      doc.fontSize(12).font('Helvetica-Bold');
+      doc.text('Prodotto', itemNameX, tableTop);
+      doc.text('Quantità', quantityX, tableTop);
+      doc.moveDown();
+
+      // Linea separatore
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+      doc.moveDown(0.5);
+
+      // Righe prodotti
+      doc.font('Helvetica').fontSize(10);
+      products.forEach((product, i) => {
+        const y = doc.y;
+
+        // Controlla se serve nuova pagina
+        if (y > 700) {
+          doc.addPage();
+          doc.y = 50;
+        }
+
+        doc.text(product.name, itemNameX, doc.y, { width: 370, continued: false });
+        doc.text(product.quantity.toString(), quantityX, y);
+        doc.moveDown(0.5);
+      });
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error('Errore export PDF:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// GET /api/:uuid/export/text - Esporta inventario in formato TESTO
+app.get('/api/:uuid/export/text', (req, res) => {
+  try {
+    const { uuid } = req.params;
+
+    if (!isValidUUID(uuid)) {
+      return res.status(400).json({ error: 'UUID non valido' });
+    }
+
+    const inventory = getOrCreateInventory(uuid);
+    const products = db.prepare(
+      'SELECT * FROM products WHERE inventory_id = ? ORDER BY name ASC'
+    ).all(inventory.id);
+
+    const inventoryName = inventory.name || 'Inventario';
+    const filename = `${inventoryName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
+
+    // Genera tabella ASCII
+    let text = '';
+    text += '='.repeat(60) + '\n';
+    text += `  ${inventoryName}\n`;
+    text += `  Data: ${new Date().toLocaleDateString('it-IT')}\n`;
+    text += `  Totale prodotti: ${products.length}\n`;
+    text += '='.repeat(60) + '\n\n';
+
+    if (products.length === 0) {
+      text += 'Nessun prodotto nell\'inventario\n';
+    } else {
+      // Calcola larghezza massima del nome prodotto
+      const maxNameLength = Math.max(...products.map(p => p.name.length), 'Prodotto'.length);
+      const nameWidth = Math.min(maxNameLength + 2, 40);
+      const qtyWidth = 10;
+
+      // Header tabella
+      text += padRight('Prodotto', nameWidth) + ' | ' + padRight('Quantità', qtyWidth) + '\n';
+      text += '-'.repeat(nameWidth) + '-+-' + '-'.repeat(qtyWidth) + '\n';
+
+      // Righe prodotti
+      products.forEach(product => {
+        const name = product.name.length > nameWidth ? product.name.substring(0, nameWidth - 3) + '...' : product.name;
+        text += padRight(name, nameWidth) + ' | ' + padRight(product.quantity.toString(), qtyWidth) + '\n';
+      });
+
+      text += '\n';
+      text += `Totale articoli: ${products.reduce((sum, p) => sum + p.quantity, 0)}\n`;
+    }
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(text);
+  } catch (error) {
+    console.error('Errore export TEXT:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// Helper function per padding testo
+function padRight(str, length) {
+  return str + ' '.repeat(Math.max(0, length - str.length));
+}
 
 // Catch-all route per servire index.html
 app.get('*', (req, res) => {
