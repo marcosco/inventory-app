@@ -185,6 +185,25 @@
       <!-- Products List -->
       <div id="productsList" class="products-list"></div>
 
+      <!-- QR Code Section -->
+      <div id="qrCodeSection" class="qr-code-section" style="display: none;">
+        <div class="qr-code-card">
+          <h3 class="qr-code-title">Condividi Inventario</h3>
+          <p class="qr-code-description">Scansiona il QR code per condividere questo inventario</p>
+          <div id="qrCodeContainer" class="qr-code-container"></div>
+          <div class="qr-code-url">
+            <input type="text" id="qrCodeUrl" class="qr-code-url-input" readonly>
+            <button id="copyUrlBtn" class="btn-copy-url" title="Copia URL" aria-label="Copia URL negli appunti">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copia URL
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Offline Message -->
       <div id="offlineMessage" class="offline-message" style="display: none;">
         ⚠️ Offline - riconnetti per sincronizzare
@@ -249,6 +268,7 @@
   </div>
 
   <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

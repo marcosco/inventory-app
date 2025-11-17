@@ -39,7 +39,11 @@ const elements = {
   sortSelect: document.getElementById('sortSelect'),
   searchInput: document.getElementById('searchInput'),
   clearSearchBtn: document.getElementById('clearSearchBtn'),
-  autocompleteList: document.getElementById('autocompleteList')
+  autocompleteList: document.getElementById('autocompleteList'),
+  qrCodeSection: document.getElementById('qrCodeSection'),
+  qrCodeContainer: document.getElementById('qrCodeContainer'),
+  qrCodeUrl: document.getElementById('qrCodeUrl'),
+  copyUrlBtn: document.getElementById('copyUrlBtn')
 };
 
 // Utility: Generate UUID v4
@@ -544,6 +548,65 @@ function saveTitleEdit() {
   updateInventoryName(newName);
 }
 
+// QR Code Functions
+let qrCodeInstance = null;
+
+function generateQRCode() {
+  if (!currentUUID) return;
+
+  // Clear previous QR code
+  elements.qrCodeContainer.innerHTML = '';
+
+  // Get current URL
+  const currentUrl = window.location.href;
+  elements.qrCodeUrl.value = currentUrl;
+
+  // Generate QR code
+  try {
+    qrCodeInstance = new QRCode(elements.qrCodeContainer, {
+      text: currentUrl,
+      width: 200,
+      height: 200,
+      colorDark: '#2563eb',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+
+    // Show QR code section if there are products
+    if (products.length > 0) {
+      elements.qrCodeSection.style.display = 'block';
+    }
+  } catch (error) {
+    console.error('Errore nella generazione del QR code:', error);
+  }
+}
+
+function updateQRCodeVisibility() {
+  // Show QR code section only if there are products
+  if (products.length > 0) {
+    elements.qrCodeSection.style.display = 'block';
+  } else {
+    elements.qrCodeSection.style.display = 'none';
+  }
+}
+
+async function copyUrlToClipboard() {
+  const url = elements.qrCodeUrl.value;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('URL copiato negli appunti!', 'success');
+  } catch (err) {
+    // Fallback per browser più vecchi
+    elements.qrCodeUrl.select();
+    try {
+      document.execCommand('copy');
+      showToast('URL copiato negli appunti!', 'success');
+    } catch (e) {
+      showToast('Errore durante la copia', 'error');
+    }
+  }
+}
+
 // Render Functions
 function renderProducts() {
   // Hide loading
@@ -573,6 +636,8 @@ function renderProducts() {
       if (emptyStateTitle) emptyStateTitle.textContent = 'Nessun prodotto';
       if (emptyStateText) emptyStateText.textContent = 'Inizia aggiungendo il primo prodotto all\'inventario!';
     }
+    // Hide QR code section when no products
+    updateQRCodeVisibility();
     return;
   }
 
@@ -613,6 +678,9 @@ function renderProducts() {
       </div>
     </div>
   `).join('');
+
+  // Update QR code visibility
+  updateQRCodeVisibility();
 }
 
 // Escape HTML to prevent XSS
@@ -835,6 +903,19 @@ function initApp() {
 
   // Check online/offline status
   updateOnlineStatus();
+
+  // Generate QR code after page loads
+  // Wait for QRCode library to load
+  if (typeof QRCode !== 'undefined') {
+    generateQRCode();
+  } else {
+    // Retry after a short delay if library not loaded yet
+    setTimeout(() => {
+      if (typeof QRCode !== 'undefined') {
+        generateQRCode();
+      }
+    }, 500);
+  }
 }
 
 // Online/Offline Detection
@@ -973,6 +1054,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && elements.exportModal.style.display === 'flex') {
     hideExportModal();
   }
+});
+
+// QR Code URL copy listener
+elements.copyUrlBtn.addEventListener('click', () => {
+  copyUrlToClipboard();
 });
 
 // Register Service Worker
