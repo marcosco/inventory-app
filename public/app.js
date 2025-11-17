@@ -1,6 +1,11 @@
 // State
 let currentUUID = null;
 let products = [];
+let ws = null;
+let wsReconnectTimeout = null;
+let wsReconnectAttempts = 0;
+const WS_MAX_RECONNECT_ATTEMPTS = 10;
+const WS_RECONNECT_DELAY = 2000;
 
 // DOM Elements
 const elements = {
@@ -344,6 +349,144 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// WebSocket Functions
+function connectWebSocket() {
+  if (!currentUUID) return;
+
+  // Close existing connection if any
+  if (ws) {
+    ws.close();
+  }
+
+  // Clear any pending reconnect
+  if (wsReconnectTimeout) {
+    clearTimeout(wsReconnectTimeout);
+    wsReconnectTimeout = null;
+  }
+
+  // Determine WebSocket protocol (ws:// or wss://)
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}`;
+
+  console.log('🔌 Connessione WebSocket a:', wsUrl);
+
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    console.log('✅ WebSocket connesso');
+    wsReconnectAttempts = 0;
+
+    // Subscribe to current inventory
+    ws.send(JSON.stringify({
+      type: 'subscribe',
+      uuid: currentUUID
+    }));
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      handleWebSocketMessage(message);
+    } catch (error) {
+      console.error('Errore nel parsing del messaggio WebSocket:', error);
+    }
+  };
+
+  ws.onerror = (error) => {
+    console.error('❌ Errore WebSocket:', error);
+  };
+
+  ws.onclose = () => {
+    console.log('🔌 WebSocket disconnesso');
+    ws = null;
+
+    // Attempt to reconnect
+    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      wsReconnectAttempts++;
+      const delay = WS_RECONNECT_DELAY * wsReconnectAttempts;
+      console.log(`🔄 Tentativo di riconnessione ${wsReconnectAttempts}/${WS_MAX_RECONNECT_ATTEMPTS} tra ${delay}ms...`);
+
+      wsReconnectTimeout = setTimeout(() => {
+        connectWebSocket();
+      }, delay);
+    } else {
+      console.error('❌ Impossibile riconnettersi al WebSocket dopo multipli tentativi');
+      showToast('Connessione real-time interrotta. Ricarica la pagina.', 'error');
+    }
+  };
+}
+
+function handleWebSocketMessage(message) {
+  console.log('📡 Messaggio WebSocket ricevuto:', message);
+
+  switch (message.type) {
+    case 'connected':
+      console.log('✅ WebSocket connesso al server');
+      break;
+
+    case 'subscribed':
+      console.log(`✅ Sottoscritto all'inventario: ${message.uuid}`);
+      break;
+
+    case 'product:added':
+      handleProductAdded(message.data.product);
+      break;
+
+    case 'product:updated':
+      handleProductUpdated(message.data.product);
+      break;
+
+    case 'product:deleted':
+      handleProductDeleted(message.data.productId);
+      break;
+
+    case 'inventory:name-changed':
+      handleInventoryNameChanged(message.data.name);
+      break;
+
+    default:
+      console.warn('Tipo di messaggio WebSocket sconosciuto:', message.type);
+  }
+}
+
+function handleProductAdded(product) {
+  // Check if product already exists (to avoid duplicates)
+  const exists = products.find(p => p.id === product.id);
+  if (exists) return;
+
+  products.push(product);
+  products.sort((a, b) => a.name.localeCompare(b.name));
+  renderProducts();
+  showToast(`Nuovo prodotto aggiunto: ${product.name}`, 'info');
+}
+
+function handleProductUpdated(product) {
+  const index = products.findIndex(p => p.id === product.id);
+  if (index === -1) {
+    // Product doesn't exist locally, add it
+    products.push(product);
+    products.sort((a, b) => a.name.localeCompare(b.name));
+  } else {
+    // Update existing product
+    products[index] = product;
+  }
+  renderProducts();
+}
+
+function handleProductDeleted(productId) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+
+  products = products.filter(p => p.id !== productId);
+  renderProducts();
+  showToast(`Prodotto eliminato: ${product.name}`, 'info');
+}
+
+function handleInventoryNameChanged(newName) {
+  updateInventoryTitle(newName);
+  showToast('Nome inventario aggiornato', 'info');
+}
+
 // Event Handlers (global functions for inline onclick)
 function handleDecreaseQuantity(productId, currentQuantity) {
   const newQuantity = Math.max(0, currentQuantity - 1);
@@ -413,6 +556,9 @@ function initApp() {
   fetchInventoryInfo();
   fetchProducts();
 
+  // Connect to WebSocket for real-time updates
+  connectWebSocket();
+
   // Check online/offline status
   updateOnlineStatus();
 }
@@ -426,8 +572,24 @@ function updateOnlineStatus() {
   }
 }
 
-window.addEventListener('online', updateOnlineStatus);
-window.addEventListener('offline', updateOnlineStatus);
+window.addEventListener('online', () => {
+  updateOnlineStatus();
+  // Reconnect WebSocket when coming back online
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    connectWebSocket();
+  }
+});
+
+window.addEventListener('offline', () => {
+  updateOnlineStatus();
+});
+
+// Close WebSocket on page unload
+window.addEventListener('beforeunload', () => {
+  if (ws) {
+    ws.close();
+  }
+});
 
 // Event Listeners
 elements.copyUuidBtn.addEventListener('click', () => {
